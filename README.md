@@ -39,4 +39,4 @@ GitHub에는 이 폴더의 내용만 별도 저장소로 올리는 것을 권장
 make_release_zip.bat
 ```
 
-생성된 `dis
+생성된 `dist/pdf_binding_sample_tool_v1.0.0.zip` 파일을 GitHub Release에 첨부하면 운영자가 ZIP을 내려받아 사용할 수 있습니다.
