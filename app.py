@@ -18,7 +18,7 @@ from reportlab.pdfgen import canvas
 
 
 APP_NAME = "PDF 제본 샘플 생성"
-WATERMARK_TEXT = "열람 출력 제본 확인용 복제 수정 배포금지로 변경"
+WATERMARK_TEXT = "열람 출력 제본 확인용 수정 배포금지"
 
 # Streamlit secrets에서 비밀번호를 가져옵니다. 
 # 배포 시 Streamlit Cloud 설정(Advanced settings -> Secrets)에서 OWNER_PASSWORD를 추가해야 합니다.
@@ -28,6 +28,7 @@ OUTPUT_MIME = "application/pdf"
 DEFAULT_DENSITY_KEY = "dense"
 
 FONT_CANDIDATES = (
+    Path(__file__).parent / "assets" / "fonts" / "NanumGothic.ttf", # 배포용 로컬 폰트 우선
     Path("C:/Windows/Fonts/malgun.ttf"),
     Path("C:/Windows/Fonts/malgunbd.ttf"),
     Path("/System/Library/Fonts/AppleSDGothicNeo.ttc"),
