@@ -128,7 +128,9 @@ def get_watermark_font_name() -> str:
             continue
 
         try:
-            pdfmetrics.registerFont(TTFont("WatermarkKorean", str(font_path)))
+            # embed=True를 설정하여 PDF 파일 안에 폰트 데이터를 포함시킵니다.
+            # 이렇게 해야 웹 브라우저 뷰어에서도 글자가 깨지지 않고 보입니다.
+            pdfmetrics.registerFont(TTFont("WatermarkKorean", str(font_path), embed=True))
             return "WatermarkKorean"
         except Exception:
             continue
