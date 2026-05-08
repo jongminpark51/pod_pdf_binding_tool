@@ -18,8 +18,12 @@ from reportlab.pdfgen import canvas
 
 
 APP_NAME = "PDF ?œë³¸ ?˜í”Œ ?ì„±"
-WATERMARK_TEXT = "?´ëŒ ì¶œë ¥ ?œë³¸ ?•ì¸??ë³µì œ ?˜ì • ë°°í¬ê¸ˆì?"
-OWNER_PASSWORD = "********"
+WATERMARK_TEXT = "?´ëŒ ì¶œë ¥ ?œë³¸ ?•ì¸??ë³µì œ ?˜ì • ë°°í¬ê¸ˆì?ë¡?ë³€ê²?
+
+# Streamlit secrets?ì„œ ë¹„ë?ë²ˆí˜¸ë¥?ê°€?¸ì˜¤ê³? ?†ìœ¼ë©?ê¸°ë³¸ê°’ì„ ?¬ìš©?©ë‹ˆ??
+# ë°°í¬ ??Streamlit Cloud ?¤ì •?ì„œ OWNER_PASSWORDë¥?ì¶”ê??´ì•¼ ?©ë‹ˆ??
+OWNER_PASSWORD = st.secrets.get("OWNER_PASSWORD", "********")
+
 OUTPUT_MIME = "application/pdf"
 DEFAULT_DENSITY_KEY = "dense"
 
@@ -30,6 +34,7 @@ FONT_CANDIDATES = (
     Path("/Library/Fonts/AppleGothic.ttf"),
     Path("/usr/share/fonts/truetype/nanum/NanumGothic.ttf"),
     Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"), # Linux/Streamlit Cloud
 )
 
 
