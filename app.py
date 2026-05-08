@@ -383,7 +383,7 @@ def render_file_order(pdfs: list[UploadedPdf]) -> None:
 
 
 def render_app() -> None:
-    st.set_page_config(page_title=APP_NAME, layout="wide")
+    st.set_page_config(page_title=APP_NAME, layout="wide", page_icon="🐧")
 
     st.title(APP_NAME)
     st.caption(f"v{app_version()}")
