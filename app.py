@@ -20,9 +20,9 @@ from reportlab.pdfgen import canvas
 APP_NAME = "PDF ?úÎ≥∏ ?òÌîå ?ùÏÑ±"
 WATERMARK_TEXT = "?¥Îûå Ï∂úÎ†• ?úÎ≥∏ ?ïÏù∏??Î≥µÏ†ú ?òÏ†ï Î∞∞Ìè¨Í∏àÏ?Î°?Î≥ÄÍ≤?
 
-# Streamlit secrets?êÏÑú ÎπÑÎ?Î≤àÌò∏Î•?Í∞Ä?∏Ïò§Í≥? ?ÜÏúºÎ©?Í∏∞Î≥∏Í∞íÏùÑ ?¨Ïö©?©Îãà??
-# Î∞∞Ìè¨ ??Streamlit Cloud ?§Ï†ï?êÏÑú OWNER_PASSWORDÎ•?Ï∂îÍ??¥Ïïº ?©Îãà??
-OWNER_PASSWORD = st.secrets.get("OWNER_PASSWORD", "********")
+# Streamlit secrets?êÏÑú ÎπÑÎ?Î≤àÌò∏Î•?Í∞Ä?∏Ïòµ?àÎã§. 
+# Î∞∞Ìè¨ ??Streamlit Cloud ?§Ï†ï(Advanced settings -> Secrets)?êÏÑú OWNER_PASSWORDÎ•?Ï∂îÍ??¥Ïïº ?©Îãà??
+OWNER_PASSWORD = st.secrets.get("OWNER_PASSWORD", "") 
 
 OUTPUT_MIME = "application/pdf"
 DEFAULT_DENSITY_KEY = "dense"
