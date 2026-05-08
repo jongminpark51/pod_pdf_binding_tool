@@ -20,9 +20,9 @@ from reportlab.pdfgen import canvas
 APP_NAME = "PDF 제본 샘플 생성"
 WATERMARK_TEXT = "열람 출력 제본 확인용 복제 수정 배포금지로 변경"
 
-# Streamlit secrets에서 비밀번호를 가져오고, 없으면 기본값을 사용합니다.
-# 배포 시 Streamlit Cloud 설정에서 OWNER_PASSWORD를 추가해야 합니다.
-OWNER_PASSWORD = st.secrets.get("OWNER_PASSWORD", "20260313!@#")
+# Streamlit secrets에서 비밀번호를 가져옵니다. 
+# 배포 시 Streamlit Cloud 설정(Advanced settings -> Secrets)에서 OWNER_PASSWORD를 추가해야 합니다.
+OWNER_PASSWORD = st.secrets.get("OWNER_PASSWORD", "") 
 
 OUTPUT_MIME = "application/pdf"
 DEFAULT_DENSITY_KEY = "dense"
