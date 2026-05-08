@@ -18,7 +18,7 @@ from reportlab.pdfgen import canvas
 
 
 APP_NAME = "PDF ?úÎ≥∏ ?òÌîå ?ùÏÑ±"
-WATERMARK_TEXT = "?¥Îûå Ï∂úÎ†• ?úÎ≥∏ ?ïÏù∏??Î≥µÏ†ú ?òÏ†ï Î∞∞Ìè¨Í∏àÏ?Î°?Î≥ÄÍ≤?
+WATERMARK_TEXT = "?¥Îûå Ï∂úÎ†• ?úÎ≥∏ ?ïÏù∏???òÏ†ï Î∞∞Ìè¨Í∏àÏ?"
 
 # Streamlit secrets?êÏÑú ÎπÑÎ?Î≤àÌò∏Î•?Í∞Ä?∏Ïòµ?àÎã§. 
 # Î∞∞Ìè¨ ??Streamlit Cloud ?§Ï†ï(Advanced settings -> Secrets)?êÏÑú OWNER_PASSWORDÎ•?Ï∂îÍ??¥Ïïº ?©Îãà??
@@ -28,6 +28,7 @@ OUTPUT_MIME = "application/pdf"
 DEFAULT_DENSITY_KEY = "dense"
 
 FONT_CANDIDATES = (
+    Path(__file__).parent / "assets" / "fonts" / "NanumGothic.ttf", # Î∞∞Ìè¨??Î°úÏª¨ ?∞Ìä∏ ?∞ÏÑ†
     Path("C:/Windows/Fonts/malgun.ttf"),
     Path("C:/Windows/Fonts/malgunbd.ttf"),
     Path("/System/Library/Fonts/AppleSDGothicNeo.ttc"),
