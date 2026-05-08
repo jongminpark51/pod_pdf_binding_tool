@@ -128,7 +128,9 @@ def get_watermark_font_name() -> str:
             continue
 
         try:
-            pdfmetrics.registerFont(TTFont("WatermarkKorean", str(font_path)))
+            # embed=Trueë¥??¤ì •?˜ì—¬ PDF ?Œì¼ ?ˆì— ?°íŠ¸ ?°ì´?°ë? ?¬í•¨?œí‚µ?ˆë‹¤.
+            # ?´ë ‡ê²??´ì•¼ ??ë¸Œë¼?°ì? ë·°ì–´?ì„œ??ê¸€?ê? ê¹¨ì?ì§€ ?Šê³  ë³´ì…?ˆë‹¤.
+            pdfmetrics.registerFont(TTFont("WatermarkKorean", str(font_path), embed=True))
             return "WatermarkKorean"
         except Exception:
             continue
