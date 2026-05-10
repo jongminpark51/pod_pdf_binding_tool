@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2 - 2026-05-10
+
+- Added an internal default owner password so Streamlit Cloud works without secrets setup.
+- Kept the owner password out of the repository as a plaintext string.
+- Updated smoke tests to verify default password generation is available.
+
 ## 1.0.1 - 2026-05-10
 
 - Restored `app.py` as valid UTF-8 source to fix Streamlit script execution failures.

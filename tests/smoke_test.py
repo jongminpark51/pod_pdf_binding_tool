@@ -13,7 +13,7 @@ from reportlab.pdfgen import canvas
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app import UploadedPdf, build_binding_sample, PdfBindingError  # noqa: E402
+from app import UploadedPdf, build_binding_sample, default_owner_password, PdfBindingError  # noqa: E402
 
 
 def make_pdf(label: str, pagesize) -> bytes:
@@ -53,7 +53,6 @@ def test_merge_and_protection() -> None:
             UploadedPdf("second", "second.pdf", second, len(second)),
         ],
         density_key="very_dense",
-        owner_password="test-owner-password",
     )
 
     reader = PdfReader(BytesIO(output))
@@ -73,7 +72,6 @@ def test_encrypted_input_rejected() -> None:
     try:
         build_binding_sample(
             [UploadedPdf("encrypted", "encrypted.pdf", encrypted_data, len(encrypted_data))],
-            owner_password="test-owner-password",
         )
     except PdfBindingError:
         return
@@ -82,6 +80,7 @@ def test_encrypted_input_rejected() -> None:
 
 
 if __name__ == "__main__":
+    assert len(default_owner_password()) == 11
     test_merge_and_protection()
     test_encrypted_input_rejected()
     print("smoke ok")

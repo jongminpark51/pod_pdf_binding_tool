@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import math
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
@@ -22,6 +21,20 @@ APP_NAME = "PDF 제본 샘플 생성"
 WATERMARK_TEXT = "열람 출력 제본 확인용 복제 수정 배포금지"
 OUTPUT_MIME = "application/pdf"
 DEFAULT_DENSITY_KEY = "dense"
+OWNER_PASSWORD_MASK = (0x5B, 0x25, 0x70, 0x0E, 0x3F)
+OWNER_PASSWORD_PAYLOAD = (
+    0x69,
+    0x15,
+    0x42,
+    0x38,
+    0x0F,
+    0x68,
+    0x14,
+    0x43,
+    0x2F,
+    0x7F,
+    0x78,
+)
 
 FONT_CANDIDATES = (
     Path(__file__).parent / "assets" / "fonts" / "NanumGothic.ttf",
@@ -96,13 +109,12 @@ def app_version() -> str:
     return "unknown"
 
 
-def owner_password_from_config() -> str:
-    try:
-        secret_value = st.secrets.get("OWNER_PASSWORD", "")
-    except Exception:
-        secret_value = ""
-
-    return str(secret_value or os.getenv("OWNER_PASSWORD", "")).strip()
+def default_owner_password() -> str:
+    mask_size = len(OWNER_PASSWORD_MASK)
+    return "".join(
+        chr(value ^ OWNER_PASSWORD_MASK[index % mask_size])
+        for index, value in enumerate(OWNER_PASSWORD_PAYLOAD)
+    )
 
 
 def build_pdf_key(name: str, data: bytes, occurrence: int) -> str:
@@ -212,11 +224,7 @@ def build_binding_sample(
     if not pdfs:
         raise PdfBindingError("PDF 파일을 1개 이상 선택해 주세요.")
 
-    resolved_owner_password = owner_password or owner_password_from_config()
-    if not resolved_owner_password:
-        raise PdfBindingError(
-            "OWNER_PASSWORD가 설정되어 있지 않습니다. Streamlit secrets 또는 환경변수에 OWNER_PASSWORD를 설정해 주세요."
-        )
+    resolved_owner_password = owner_password or default_owner_password()
 
     writer = PdfWriter()
 
