@@ -8,3 +8,6 @@ dist/
 .idea/
 *.swp
 *.bak
+binding_sample_*.pdf
+font_test*.pdf
+assets/images/

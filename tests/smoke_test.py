@@ -53,6 +53,7 @@ def test_merge_and_protection() -> None:
             UploadedPdf("second", "second.pdf", second, len(second)),
         ],
         density_key="very_dense",
+        owner_password="test-owner-password",
     )
 
     reader = PdfReader(BytesIO(output))
@@ -71,7 +72,8 @@ def test_encrypted_input_rejected() -> None:
 
     try:
         build_binding_sample(
-            [UploadedPdf("encrypted", "encrypted.pdf", encrypted_data, len(encrypted_data))]
+            [UploadedPdf("encrypted", "encrypted.pdf", encrypted_data, len(encrypted_data))],
+            owner_password="test-owner-password",
         )
     except PdfBindingError:
         return

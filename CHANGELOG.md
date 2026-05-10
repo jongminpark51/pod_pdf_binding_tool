@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1 - 2026-05-10
+
+- Restored `app.py` as valid UTF-8 source to fix Streamlit script execution failures.
+- Kept Korean UI labels and watermark text in UTF-8.
+- Made PDF owner password configurable through Streamlit secrets or the `OWNER_PASSWORD` environment variable.
+- Updated smoke tests to use an explicit test owner password.
+
 ## 1.0.0 - 2026-05-08
 
 - Added the operator-facing local Streamlit app for PDF sample binding.

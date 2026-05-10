@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
@@ -18,24 +19,19 @@ from reportlab.pdfgen import canvas
 
 
 APP_NAME = "PDF 제본 샘플 생성"
-WATERMARK_TEXT = "열람 출력 제본 확인용 수정 배포금지"
-
-# Streamlit secrets에서 비밀번호를 가져옵니다. 
-# 배포 시 Streamlit Cloud 설정(Advanced settings -> Secrets)에서 OWNER_PASSWORD를 추가해야 합니다.
-OWNER_PASSWORD = st.secrets.get("OWNER_PASSWORD", "") 
-
+WATERMARK_TEXT = "열람 출력 제본 확인용 복제 수정 배포금지"
 OUTPUT_MIME = "application/pdf"
 DEFAULT_DENSITY_KEY = "dense"
 
 FONT_CANDIDATES = (
-    Path(__file__).parent / "assets" / "fonts" / "NanumGothic.ttf", # 배포용 로컬 폰트 우선
+    Path(__file__).parent / "assets" / "fonts" / "NanumGothic.ttf",
     Path("C:/Windows/Fonts/malgun.ttf"),
     Path("C:/Windows/Fonts/malgunbd.ttf"),
     Path("/System/Library/Fonts/AppleSDGothicNeo.ttc"),
     Path("/Library/Fonts/AppleGothic.ttf"),
     Path("/usr/share/fonts/truetype/nanum/NanumGothic.ttf"),
     Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
-    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"), # Linux/Streamlit Cloud
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
 )
 
 
@@ -100,6 +96,15 @@ def app_version() -> str:
     return "unknown"
 
 
+def owner_password_from_config() -> str:
+    try:
+        secret_value = st.secrets.get("OWNER_PASSWORD", "")
+    except Exception:
+        secret_value = ""
+
+    return str(secret_value or os.getenv("OWNER_PASSWORD", "")).strip()
+
+
 def build_pdf_key(name: str, data: bytes, occurrence: int) -> str:
     digest = hashlib.sha256(data).hexdigest()[:16]
     return f"{name}:{len(data)}:{digest}:{occurrence}"
@@ -129,8 +134,6 @@ def get_watermark_font_name() -> str:
             continue
 
         try:
-            # TTFont는 기본적으로 임베딩을 지원합니다. (embed 키워드 대신 기본 동작 사용)
-            # 이렇게 해야 웹 브라우저 뷰어에서도 글자가 깨지지 않고 보입니다.
             pdfmetrics.registerFont(TTFont("WatermarkKorean", str(font_path)))
             return "WatermarkKorean"
         except Exception:
@@ -204,9 +207,16 @@ def read_pdf(uploaded_pdf: UploadedPdf) -> PdfReader:
 def build_binding_sample(
     pdfs: list[UploadedPdf],
     density_key: str = DEFAULT_DENSITY_KEY,
+    owner_password: str | None = None,
 ) -> bytes:
     if not pdfs:
         raise PdfBindingError("PDF 파일을 1개 이상 선택해 주세요.")
+
+    resolved_owner_password = owner_password or owner_password_from_config()
+    if not resolved_owner_password:
+        raise PdfBindingError(
+            "OWNER_PASSWORD가 설정되어 있지 않습니다. Streamlit secrets 또는 환경변수에 OWNER_PASSWORD를 설정해 주세요."
+        )
 
     writer = PdfWriter()
 
@@ -229,7 +239,7 @@ def build_binding_sample(
 
     writer.encrypt(
         user_password="",
-        owner_password=OWNER_PASSWORD,
+        owner_password=resolved_owner_password,
         permissions_flag=UserAccessPermissions(0),
         algorithm="AES-256-R5",
     )
@@ -248,7 +258,8 @@ def current_uploaded_pdfs(uploaded_files) -> list[UploadedPdf]:
 
     for uploaded_file in uploaded_files:
         data = uploaded_file.getvalue()
-        base_key = f"{uploaded_file.name}:{len(data)}:{hashlib.sha256(data).hexdigest()[:16]}"
+        digest = hashlib.sha256(data).hexdigest()[:16]
+        base_key = f"{uploaded_file.name}:{len(data)}:{digest}"
         occurrence = seen.get(base_key, 0) + 1
         seen[base_key] = occurrence
 
@@ -347,7 +358,7 @@ def render_file_order(pdfs: list[UploadedPdf]) -> None:
         header_cols[1].caption("파일명")
         header_cols[2].caption("크기")
 
-        for index, pdf in enumerate(pdfs):
+        for pdf in pdfs:
             cols = st.columns([1, 5.4, 1.3])
             cols[0].number_input(
                 "순서",
@@ -383,13 +394,15 @@ def render_file_order(pdfs: list[UploadedPdf]) -> None:
 
 
 def render_app() -> None:
-    st.set_page_config(page_title=APP_NAME, layout="wide", page_icon="🐧")
+    st.set_page_config(page_title=APP_NAME, layout="wide")
 
     st.title(APP_NAME)
     st.caption(f"v{app_version()}")
 
     density_labels = [density.label for density in WATERMARK_DENSITIES.values()]
-    default_density_index = density_labels.index(WATERMARK_DENSITIES[DEFAULT_DENSITY_KEY].label)
+    default_density_index = density_labels.index(
+        WATERMARK_DENSITIES[DEFAULT_DENSITY_KEY].label
+    )
     selected_density_label = st.selectbox(
         "워터마크 밀도",
         density_labels,
