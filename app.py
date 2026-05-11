@@ -268,25 +268,38 @@ def make_watermark_page(width: float, height: float, density_key: str):
     return PdfReader(BytesIO(watermark_pdf)).pages[0]
 
 
-def read_pdf(uploaded_pdf: UploadedPdf) -> PdfReader:
+def read_pdf(uploaded_pdf: UploadedPdf, input_pdf_password: str = "") -> PdfReader:
     try:
         reader = PdfReader(BytesIO(uploaded_pdf.data))
     except Exception as exc:
         raise PdfBindingError(f"{uploaded_pdf.name}: PDF 파일을 읽을 수 없습니다.") from exc
 
     if reader.is_encrypted:
+        password_candidates = ["", input_pdf_password]
+        for password in password_candidates:
+            if password is None:
+                continue
+            try:
+                if reader.decrypt(password) != 0:
+                    return reader
+            except Exception:
+                continue
+
         raise PdfBindingError(
-            f"{uploaded_pdf.name}: 암호화된 PDF는 처리할 수 없습니다."
+            f"{uploaded_pdf.name}: 암호화된 PDF입니다. 원본 PDF 열람 비밀번호를 입력해 주세요."
         )
 
     return reader
 
 
-def build_clean_merged_pdf(pdfs: list[UploadedPdf]) -> bytes:
+def build_clean_merged_pdf(
+    pdfs: list[UploadedPdf],
+    input_pdf_password: str = "",
+) -> bytes:
     writer = PdfWriter()
 
     for uploaded_pdf in pdfs:
-        reader = read_pdf(uploaded_pdf)
+        reader = read_pdf(uploaded_pdf, input_pdf_password=input_pdf_password)
         for page in reader.pages:
             try:
                 page.transfer_rotation_to_content()
@@ -303,17 +316,21 @@ def build_binding_sample(
     pdfs: list[UploadedPdf],
     density_key: str = DEFAULT_DENSITY_KEY,
     owner_password: str | None = None,
+    input_pdf_password: str = "",
 ) -> bytes:
     if not pdfs:
         raise PdfBindingError("PDF 파일을 1개 이상 선택해 주세요.")
 
     resolved_owner_password = owner_password or default_owner_password()
-    clean_pdf = build_clean_merged_pdf(pdfs)
+    clean_pdf = build_clean_merged_pdf(
+        pdfs,
+        input_pdf_password=input_pdf_password,
+    )
 
     writer = PdfWriter()
 
     for uploaded_pdf in pdfs:
-        reader = read_pdf(uploaded_pdf)
+        reader = read_pdf(uploaded_pdf, input_pdf_password=input_pdf_password)
         for page in reader.pages:
             try:
                 page.transfer_rotation_to_content()
@@ -543,6 +560,12 @@ def render_create_tab() -> None:
         accept_multiple_files=True,
         key="pdf_uploads",
     )
+    input_pdf_password = st.text_input(
+        "원본 PDF 열람 비밀번호",
+        type="password",
+        help="암호화된 입력 PDF가 있을 때만 입력합니다. 비밀번호가 없는 PDF는 비워 두세요.",
+        key="input_pdf_password",
+    )
 
     if "file_order" not in st.session_state:
         st.session_state.file_order = []
@@ -565,6 +588,7 @@ def render_create_tab() -> None:
                     st.session_state.generated_pdf = build_binding_sample(
                         ordered,
                         density_key=density_key,
+                        input_pdf_password=input_pdf_password,
                     )
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     st.session_state.generated_filename = (

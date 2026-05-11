@@ -99,8 +99,31 @@ def test_encrypted_input_rejected() -> None:
     raise AssertionError("encrypted input should be rejected")
 
 
+def test_encrypted_input_with_password() -> None:
+    source = make_pdf("encrypted source", A4)
+    reader = PdfReader(BytesIO(source))
+    writer = PdfWriter()
+    for page in reader.pages:
+        writer.add_page(page)
+
+    encrypted = BytesIO()
+    writer.encrypt(user_password="source-password")
+    writer.write(encrypted)
+    encrypted_data = encrypted.getvalue()
+
+    output = build_binding_sample(
+        [UploadedPdf("encrypted-source", "encrypted-source.pdf", encrypted_data, len(encrypted_data))],
+        input_pdf_password="source-password",
+    )
+    output_reader = PdfReader(BytesIO(output))
+    output_reader.decrypt("")
+    assert len(output_reader.pages) == 1
+    assert has_restore_payload(output)
+
+
 if __name__ == "__main__":
     assert len(default_owner_password()) == 11
     test_merge_and_protection()
     test_encrypted_input_rejected()
+    test_encrypted_input_with_password()
     print("smoke ok")
