@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import math
+import secrets as token_secrets
+import struct
+import zlib
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
@@ -9,6 +12,10 @@ from io import BytesIO
 from pathlib import Path
 
 import streamlit as st
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from pypdf import PdfReader, PdfWriter
 from pypdf.constants import UserAccessPermissions
 from reportlab.lib import colors
@@ -21,6 +28,11 @@ APP_NAME = "PDF 제본 샘플 생성"
 WATERMARK_TEXT = "열람 출력 제본 확인용 복제 수정 배포금지"
 OUTPUT_MIME = "application/pdf"
 DEFAULT_DENSITY_KEY = "dense"
+RESTORE_ATTACHMENT_NAME = "pod_binding_clean_payload.v1.bin"
+RESTORE_PAYLOAD_MAGIC = b"POD-PDF-CLEAN-V1\0"
+RESTORE_KDF_ITERATIONS = 200_000
+RESTORE_SALT_SIZE = 16
+RESTORE_NONCE_SIZE = 12
 OWNER_PASSWORD_MASK = (0x5B, 0x25, 0x70, 0x0E, 0x3F)
 OWNER_PASSWORD_PAYLOAD = (
     0x69,
@@ -115,6 +127,60 @@ def default_owner_password() -> str:
         chr(value ^ OWNER_PASSWORD_MASK[index % mask_size])
         for index, value in enumerate(OWNER_PASSWORD_PAYLOAD)
     )
+
+
+def derive_restore_key(password: str, salt: bytes, iterations: int) -> bytes:
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=iterations,
+    )
+    return kdf.derive(password.encode("utf-8"))
+
+
+def encrypt_restore_payload(clean_pdf: bytes, password: str) -> bytes:
+    salt = token_secrets.token_bytes(RESTORE_SALT_SIZE)
+    nonce = token_secrets.token_bytes(RESTORE_NONCE_SIZE)
+    key = derive_restore_key(password, salt, RESTORE_KDF_ITERATIONS)
+    compressed_pdf = zlib.compress(clean_pdf, level=9)
+    ciphertext = AESGCM(key).encrypt(nonce, compressed_pdf, RESTORE_PAYLOAD_MAGIC)
+    return (
+        RESTORE_PAYLOAD_MAGIC
+        + struct.pack(">I", RESTORE_KDF_ITERATIONS)
+        + salt
+        + nonce
+        + ciphertext
+    )
+
+
+def decrypt_restore_payload(payload: bytes, password: str) -> bytes:
+    if not payload.startswith(RESTORE_PAYLOAD_MAGIC):
+        raise PdfBindingError("복원 데이터를 확인할 수 없습니다.")
+
+    offset = len(RESTORE_PAYLOAD_MAGIC)
+    header_size = 4 + RESTORE_SALT_SIZE + RESTORE_NONCE_SIZE
+    if len(payload) <= offset + header_size:
+        raise PdfBindingError("복원 데이터가 손상되었습니다.")
+
+    iterations = struct.unpack(">I", payload[offset : offset + 4])[0]
+    offset += 4
+    salt = payload[offset : offset + RESTORE_SALT_SIZE]
+    offset += RESTORE_SALT_SIZE
+    nonce = payload[offset : offset + RESTORE_NONCE_SIZE]
+    offset += RESTORE_NONCE_SIZE
+    ciphertext = payload[offset:]
+
+    try:
+        key = derive_restore_key(password, salt, iterations)
+        compressed_pdf = AESGCM(key).decrypt(
+            nonce,
+            ciphertext,
+            RESTORE_PAYLOAD_MAGIC,
+        )
+        return zlib.decompress(compressed_pdf)
+    except (InvalidTag, ValueError, zlib.error) as exc:
+        raise PdfBindingError("편집 비밀번호가 맞지 않거나 복원 데이터가 손상되었습니다.") from exc
 
 
 def build_pdf_key(name: str, data: bytes, occurrence: int) -> str:
@@ -216,6 +282,23 @@ def read_pdf(uploaded_pdf: UploadedPdf) -> PdfReader:
     return reader
 
 
+def build_clean_merged_pdf(pdfs: list[UploadedPdf]) -> bytes:
+    writer = PdfWriter()
+
+    for uploaded_pdf in pdfs:
+        reader = read_pdf(uploaded_pdf)
+        for page in reader.pages:
+            try:
+                page.transfer_rotation_to_content()
+            except Exception:
+                pass
+            writer.add_page(page)
+
+    output = BytesIO()
+    writer.write(output)
+    return output.getvalue()
+
+
 def build_binding_sample(
     pdfs: list[UploadedPdf],
     density_key: str = DEFAULT_DENSITY_KEY,
@@ -225,6 +308,7 @@ def build_binding_sample(
         raise PdfBindingError("PDF 파일을 1개 이상 선택해 주세요.")
 
     resolved_owner_password = owner_password or default_owner_password()
+    clean_pdf = build_clean_merged_pdf(pdfs)
 
     writer = PdfWriter()
 
@@ -245,6 +329,10 @@ def build_binding_sample(
                 page.merge_page(watermark_page)
             writer.add_page(page)
 
+    writer.add_attachment(
+        RESTORE_ATTACHMENT_NAME,
+        encrypt_restore_payload(clean_pdf, resolved_owner_password),
+    )
     writer.encrypt(
         user_password="",
         owner_password=resolved_owner_password,
@@ -255,6 +343,42 @@ def build_binding_sample(
     output = BytesIO()
     writer.write(output)
     return output.getvalue()
+
+
+def restore_clean_pdf_from_sample(sample_pdf: bytes, owner_password: str) -> bytes:
+    if not owner_password:
+        raise PdfBindingError("편집 비밀번호를 입력해 주세요.")
+
+    try:
+        reader = PdfReader(BytesIO(sample_pdf))
+    except Exception as exc:
+        raise PdfBindingError("PDF 파일을 읽을 수 없습니다.") from exc
+
+    if reader.is_encrypted:
+        if reader.decrypt(owner_password) == 0:
+            reader.decrypt("")
+
+    try:
+        payloads = reader.attachments.get(RESTORE_ATTACHMENT_NAME)
+    except Exception as exc:
+        raise PdfBindingError("복원 데이터를 읽을 수 없습니다.") from exc
+
+    if not payloads:
+        raise PdfBindingError("복원 데이터가 없습니다. v1.1.0 이후 생성된 PDF만 복원할 수 있습니다.")
+
+    return decrypt_restore_payload(payloads[0], owner_password)
+
+
+def has_restore_payload(sample_pdf: bytes) -> bool:
+    try:
+        reader = PdfReader(BytesIO(sample_pdf))
+        if reader.is_encrypted:
+            reader.decrypt("")
+        payloads = reader.attachments.get(RESTORE_ATTACHMENT_NAME)
+    except Exception:
+        return False
+
+    return bool(payloads)
 
 
 def current_uploaded_pdfs(uploaded_files) -> list[UploadedPdf]:
@@ -401,12 +525,7 @@ def render_file_order(pdfs: list[UploadedPdf]) -> None:
         cols[3].write(format_bytes(pdf.size))
 
 
-def render_app() -> None:
-    st.set_page_config(page_title=APP_NAME, layout="wide")
-
-    st.title(APP_NAME)
-    st.caption(f"v{app_version()}")
-
+def render_create_tab() -> None:
     density_labels = [density.label for density in WATERMARK_DENSITIES.values()]
     default_density_index = density_labels.index(
         WATERMARK_DENSITIES[DEFAULT_DENSITY_KEY].label
@@ -465,6 +584,75 @@ def render_app() -> None:
             mime=OUTPUT_MIME,
             type="primary",
         )
+
+
+def render_restore_tab() -> None:
+    uploaded_file = st.file_uploader(
+        "복원할 PDF 파일",
+        type=["pdf"],
+        key="restore_pdf",
+    )
+    owner_password = st.text_input(
+        "편집 비밀번호",
+        type="password",
+        key="restore_owner_password",
+    )
+
+    if uploaded_file is not None:
+        if has_restore_payload(uploaded_file.getvalue()):
+            st.success("복원 가능한 PDF로 인식했습니다.")
+        else:
+            st.warning("복원 데이터가 없는 PDF입니다. v1.1.0 이후 이 도구에서 생성한 PDF만 복원할 수 있습니다.")
+
+    if "restored_pdf" not in st.session_state:
+        st.session_state.restored_pdf = None
+    if "restored_filename" not in st.session_state:
+        st.session_state.restored_filename = None
+
+    if st.button("워터마크 제거", type="primary"):
+        st.session_state.restored_pdf = None
+        st.session_state.restored_filename = None
+
+        if uploaded_file is None:
+            st.error("PDF 파일을 선택해 주세요.")
+        else:
+            try:
+                with st.spinner("복원 중"):
+                    st.session_state.restored_pdf = restore_clean_pdf_from_sample(
+                        uploaded_file.getvalue(),
+                        owner_password,
+                    )
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    st.session_state.restored_filename = (
+                        f"binding_clean_{timestamp}.pdf"
+                    )
+                st.success("복원 완료")
+            except PdfBindingError as exc:
+                st.error(str(exc))
+            except Exception as exc:
+                st.error(f"복원 중 오류가 발생했습니다: {exc}")
+
+    if st.session_state.restored_pdf:
+        st.download_button(
+            "워터마크 제거본 다운로드",
+            data=st.session_state.restored_pdf,
+            file_name=st.session_state.restored_filename,
+            mime=OUTPUT_MIME,
+            type="primary",
+        )
+
+
+def render_app() -> None:
+    st.set_page_config(page_title=APP_NAME, layout="wide")
+
+    st.title(APP_NAME)
+    st.caption(f"v{app_version()}")
+
+    create_tab, restore_tab = st.tabs(["PDF 생성", "워터마크 제거"])
+    with create_tab:
+        render_create_tab()
+    with restore_tab:
+        render_restore_tab()
 
 
 if __name__ == "__main__":

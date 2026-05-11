@@ -13,7 +13,14 @@ from reportlab.pdfgen import canvas
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app import UploadedPdf, build_binding_sample, default_owner_password, PdfBindingError  # noqa: E402
+from app import (  # noqa: E402
+    PdfBindingError,
+    UploadedPdf,
+    build_binding_sample,
+    default_owner_password,
+    has_restore_payload,
+    restore_clean_pdf_from_sample,
+)
 
 
 def make_pdf(label: str, pagesize) -> bytes:
@@ -59,6 +66,19 @@ def test_merge_and_protection() -> None:
     reader.decrypt("")
     assert len(reader.pages) == 2
     assert_output_permissions(output)
+    assert has_restore_payload(output)
+
+    restored = restore_clean_pdf_from_sample(output, default_owner_password())
+    restored_reader = PdfReader(BytesIO(restored))
+    assert not restored_reader.is_encrypted
+    assert len(restored_reader.pages) == 2
+
+    try:
+        restore_clean_pdf_from_sample(output, "wrong-password")
+    except PdfBindingError:
+        pass
+    else:
+        raise AssertionError("wrong owner password should not restore the clean PDF")
 
 
 def test_encrypted_input_rejected() -> None:
