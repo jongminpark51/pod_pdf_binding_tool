@@ -26,6 +26,8 @@ GitHub 저장소를 Streamlit Cloud에 연결할 때 main file path는 아래처
 app.py
 ```
 
+Python version은 `3.12`로 선택합니다. Streamlit Cloud 로그에 `Python 3.14.x`처럼 다른 버전이 보이면 앱을 삭제한 뒤 같은 URL로 재배포하면서 Advanced settings에서 Python `3.12`를 다시 선택합니다.
+
 별도 Secrets 설정 없이 실행할 수 있습니다. PDF owner password는 앱 내부 기본값을 사용하되, 저장소에는 평문으로 노출하지 않습니다.
 
 ## 워터마크 제거 방식
@@ -55,6 +57,8 @@ python -m venv .venv
 ```powershell
 .\.venv\Scripts\python.exe tests\smoke_test.py
 ```
+
+GitHub Actions는 Windows와 Linux에서 Python `3.12`로 같은 smoke test를 실행합니다. Linux 테스트는 Streamlit Cloud 배포 환경과의 차이를 미리 잡기 위한 것입니다.
 
 ## 배포
 
