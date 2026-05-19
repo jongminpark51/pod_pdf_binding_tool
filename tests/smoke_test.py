@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from app import (  # noqa: E402
     build_binding_sample,
     default_owner_password,
     has_restore_payload,
+    restored_download_filename,
     restore_clean_pdf_from_sample,
 )
 
@@ -107,13 +109,13 @@ def test_encrypted_input_with_password() -> None:
         writer.add_page(page)
 
     encrypted = BytesIO()
-    writer.encrypt(user_password="source-password")
+    writer.encrypt(user_password=default_owner_password())
     writer.write(encrypted)
     encrypted_data = encrypted.getvalue()
 
     output = build_binding_sample(
         [UploadedPdf("encrypted-source", "encrypted-source.pdf", encrypted_data, len(encrypted_data))],
-        input_pdf_password="source-password",
+        input_pdf_password=default_owner_password(),
     )
     output_reader = PdfReader(BytesIO(output))
     output_reader.decrypt("")
@@ -121,9 +123,21 @@ def test_encrypted_input_with_password() -> None:
     assert has_restore_payload(output)
 
 
+def test_restored_download_filename() -> None:
+    assert (
+        restored_download_filename("sample.output.pdf", datetime(2026, 5, 19))
+        == "sample.output_20260519.pdf"
+    )
+    assert (
+        restored_download_filename(".pdf", datetime(2026, 5, 19))
+        == "restored_20260519.pdf"
+    )
+
+
 if __name__ == "__main__":
     assert len(default_owner_password()) == 11
     test_merge_and_protection()
     test_encrypted_input_rejected()
     test_encrypted_input_with_password()
+    test_restored_download_filename()
     print("smoke ok")

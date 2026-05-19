@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import hashlib
 import math
 import secrets as token_secrets
@@ -127,6 +128,38 @@ def default_owner_password() -> str:
         chr(value ^ OWNER_PASSWORD_MASK[index % mask_size])
         for index, value in enumerate(OWNER_PASSWORD_PAYLOAD)
     )
+
+
+def restored_download_filename(upload_name: str, now: datetime | None = None) -> str:
+    stem = Path(upload_name).stem.strip()
+    if not stem or stem.startswith("."):
+        stem = "restored"
+    timestamp = (now or datetime.now()).strftime("%Y%m%d")
+    return f"{stem}_{timestamp}.pdf"
+
+
+def is_authenticated() -> bool:
+    return bool(st.session_state.get("authenticated"))
+
+
+def render_login_gate() -> bool:
+    if is_authenticated():
+        return True
+
+    st.subheader("운영자 로그인")
+    st.caption("공유된 운영자 암호를 입력하면 PDF 생성과 워터마크 제거 기능을 사용할 수 있습니다.")
+
+    with st.form("operator_login_form"):
+        password = st.text_input("운영자 암호", type="password")
+        submitted = st.form_submit_button("로그인", type="primary")
+
+    if submitted:
+        if hmac.compare_digest(password, default_owner_password()):
+            st.session_state.authenticated = True
+            st.rerun()
+        st.error("운영자 암호가 올바르지 않습니다.")
+
+    return False
 
 
 def derive_restore_key(password: str, salt: bytes, iterations: int) -> bytes:
@@ -560,12 +593,7 @@ def render_create_tab() -> None:
         accept_multiple_files=True,
         key="pdf_uploads",
     )
-    input_pdf_password = st.text_input(
-        "원본 PDF 열람 비밀번호",
-        type="password",
-        help="암호화된 입력 PDF가 있을 때만 입력합니다. 비밀번호가 없는 PDF는 비워 두세요.",
-        key="input_pdf_password",
-    )
+    fixed_password = default_owner_password()
 
     if "file_order" not in st.session_state:
         st.session_state.file_order = []
@@ -588,7 +616,8 @@ def render_create_tab() -> None:
                     st.session_state.generated_pdf = build_binding_sample(
                         ordered,
                         density_key=density_key,
-                        input_pdf_password=input_pdf_password,
+                        owner_password=fixed_password,
+                        input_pdf_password=fixed_password,
                     )
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     st.session_state.generated_filename = (
@@ -611,58 +640,74 @@ def render_create_tab() -> None:
 
 
 def render_restore_tab() -> None:
-    uploaded_file = st.file_uploader(
+    uploaded_files = st.file_uploader(
         "복원할 PDF 파일",
         type=["pdf"],
-        key="restore_pdf",
+        accept_multiple_files=True,
+        key="restore_pdfs",
     )
-    owner_password = st.text_input(
-        "편집 비밀번호",
-        type="password",
-        key="restore_owner_password",
-    )
+    fixed_password = default_owner_password()
 
-    if uploaded_file is not None:
-        if has_restore_payload(uploaded_file.getvalue()):
-            st.success("복원 가능한 PDF로 인식했습니다.")
-        else:
-            st.warning("복원 데이터가 없는 PDF입니다. v1.1.0 이후 이 도구에서 생성한 PDF만 복원할 수 있습니다.")
+    if uploaded_files:
+        for uploaded_file in uploaded_files:
+            if has_restore_payload(uploaded_file.getvalue()):
+                st.success(f"{uploaded_file.name}: 복원 가능한 PDF로 인식했습니다.")
+            else:
+                st.warning(
+                    f"{uploaded_file.name}: 복원 데이터가 없는 PDF입니다. "
+                    "v1.1.0 이후 이 도구에서 생성한 PDF만 복원할 수 있습니다."
+                )
 
-    if "restored_pdf" not in st.session_state:
-        st.session_state.restored_pdf = None
-    if "restored_filename" not in st.session_state:
-        st.session_state.restored_filename = None
+    if "restored_files" not in st.session_state:
+        st.session_state.restored_files = []
 
     if st.button("워터마크 제거", type="primary"):
-        st.session_state.restored_pdf = None
-        st.session_state.restored_filename = None
+        st.session_state.restored_files = []
 
-        if uploaded_file is None:
+        if not uploaded_files:
             st.error("PDF 파일을 선택해 주세요.")
         else:
-            try:
-                with st.spinner("복원 중"):
-                    st.session_state.restored_pdf = restore_clean_pdf_from_sample(
-                        uploaded_file.getvalue(),
-                        owner_password,
-                    )
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    st.session_state.restored_filename = (
-                        f"binding_clean_{timestamp}.pdf"
-                    )
-                st.success("복원 완료")
-            except PdfBindingError as exc:
-                st.error(str(exc))
-            except Exception as exc:
-                st.error(f"복원 중 오류가 발생했습니다: {exc}")
+            restored_files = []
+            errors = []
+            restored_at = datetime.now()
 
-    if st.session_state.restored_pdf:
+            with st.spinner("복원 중"):
+                for uploaded_file in uploaded_files:
+                    try:
+                        restored_files.append(
+                            {
+                                "name": restored_download_filename(
+                                    uploaded_file.name,
+                                    restored_at,
+                                ),
+                                "data": restore_clean_pdf_from_sample(
+                                    uploaded_file.getvalue(),
+                                    fixed_password,
+                                ),
+                            }
+                        )
+                    except PdfBindingError as exc:
+                        errors.append(f"{uploaded_file.name}: {exc}")
+                    except Exception as exc:
+                        errors.append(
+                            f"{uploaded_file.name}: 복원 중 오류가 발생했습니다: {exc}"
+                        )
+
+            st.session_state.restored_files = restored_files
+
+            if restored_files:
+                st.success(f"{len(restored_files)}개 파일 복원 완료")
+            for error in errors:
+                st.error(error)
+
+    for index, restored_file in enumerate(st.session_state.restored_files):
         st.download_button(
-            "워터마크 제거본 다운로드",
-            data=st.session_state.restored_pdf,
-            file_name=st.session_state.restored_filename,
+            f"{restored_file['name']} 다운로드",
+            data=restored_file["data"],
+            file_name=restored_file["name"],
             mime=OUTPUT_MIME,
-            type="primary",
+            type="primary" if index == 0 else "secondary",
+            key=f"restored_download_{index}_{restored_file['name']}",
         )
 
 
@@ -671,6 +716,13 @@ def render_app() -> None:
 
     st.title(APP_NAME)
     st.caption(f"v{app_version()}")
+
+    if not render_login_gate():
+        return
+
+    if st.sidebar.button("로그아웃"):
+        st.session_state.authenticated = False
+        st.rerun()
 
     create_tab, restore_tab = st.tabs(["PDF 생성", "워터마크 제거"])
     with create_tab:

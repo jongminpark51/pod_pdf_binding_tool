@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0 - 2026-05-19
+
+- Added an operator login gate so the app asks for the shared password on first access.
+- Removed per-action password inputs; PDF creation and watermark removal now use the internal fixed password automatically.
+- Added batch upload support to the watermark removal workflow.
+- Changed restored download filenames to keep the uploaded file stem and append the download date.
+
 ## 1.1.1 - 2026-05-11
 
 - Added support for encrypted input PDFs when the operator provides the source PDF open password.
